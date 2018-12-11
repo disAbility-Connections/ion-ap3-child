@@ -14,3 +14,14 @@ function ap3_ion_enqueue_styles() {
 }
 
 // Add your custom functions here
+
+add_action( 'pre_get_posts', function( $query ) {
+	
+	if ( $query->get( 'categories' ) && 
+	   isset( $_GET['search'] ) ) {
+		
+		$query->set( 's', esc_attr( $_GET['search'] ) );
+		
+	}
+	
+} );
