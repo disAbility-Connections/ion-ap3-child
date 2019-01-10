@@ -17,6 +17,9 @@ function ap3_ion_enqueue_styles() {
 
 add_action( 'pre_get_posts', function( $query ) {
 	
+	$query->set( 'orderby', 'title' );
+	$query->set( 'order', 'ASC' );
+	
 	if ( $query->get( 'categories' ) && 
 	   isset( $_GET['search'] ) ) {
 		
