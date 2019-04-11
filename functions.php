@@ -92,10 +92,11 @@ function accessforall_custom_posts_where( $where, $query ) {
 		$user_where = accessforall_custom_get_user_posts_where();
 
 		$where .= " OR (
-						{$wpdb->term_taxonomy}.taxonomy IN( 'category', 'post_tag' )
+						{$wpdb->term_taxonomy}.taxonomy IN( 'category' )
 						AND
 						{$wpdb->terms}.name LIKE '%" . esc_sql( $_GET['search'] ) . "%'
 						{$user_where}
+						" . apply_filters( 'accessforall_custom_posts_where', '' ) . "
 					)";
 		
 	}
@@ -103,6 +104,43 @@ function accessforall_custom_posts_where( $where, $query ) {
     return $where;
 
 }
+
+add_filter( 'accessforall_custom_posts_where', function( $where ) {
+	
+	if ( ! isset( $_GET['categories'] ) || 
+	   ! $_GET['categories'] ) return;
+	
+	global $wpdb;
+	
+	$category_ids = explode( ',', $_GET['categories'] );
+	
+	$where .= " AND (
+	";
+	
+	$first = true;
+	
+	$user_where = accessforall_custom_get_user_posts_where();
+	
+	foreach ( $category_ids as $category_id ) {
+		
+		$category = get_term( trim( $category_id ), 'category' );
+		
+		if ( ! $first ) {
+			
+			$where .= 'OR';
+		}
+		
+		$where .= "{$wpdb->terms}.slug LIKE '" . esc_sql( $category->slug ) . "%'";
+		
+		$first = false;
+		
+	}
+	
+	$where .= ')';
+	
+	return $where;
+	
+} );
 
 /**
  * Get a where clause dependent on the current user's status.
@@ -119,18 +157,18 @@ function accessforall_custom_get_user_posts_where() {
     global $wpdb;
 
     $user_id = get_current_user_id();
-    $sql     = '';
-    $status  = array( "'publish'" );
+	
+	$sql = " AND ({$wpdb->posts}.post_status = 'publish'";
 
     if ( $user_id ) {
 
         $status[] = "'private'";
 
-        $sql .= " AND {$wpdb->posts}.post_author = {$user_id}";
+        $sql .= " OR {$wpdb->posts}.post_author = {$user_id} AND {$wpdb->posts}.post_status = 'private'";
 
     }
-
-    $sql .= " AND {$wpdb->posts}.post_status IN( " . implode( ',', $status ) . " ) ";
+	
+	$sql .= ")";
 
     return $sql;
 
