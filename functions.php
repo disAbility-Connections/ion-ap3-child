@@ -146,17 +146,30 @@ add_filter( 'accessforall_custom_posts_where_category', function( $where ) {
 // This accounts for searching by Tag without leaking into other Categories
 add_filter( 'accessforall_custom_posts_where_after', function( $where ) {
 	
-	if ( ! isset( $_GET['categories'] ) || 
-	   ! $_GET['categories'] ) return $where;
-	
 	if ( ! isset( $_GET['search'] ) || 
 	   ! $_GET['search'] ) return $where;
 	
 	global $wpdb;
 	
-	$category_ids = explode( ',', $_GET['categories'] );
-	
 	$user_where = accessforall_custom_get_user_posts_where();
+	
+	if ( ! isset( $_GET['categories'] ) || 
+	   ! $_GET['categories'] ) {
+		
+		$where .= ' OR ( ';
+	
+			$where .= "{$wpdb->term_taxonomy}.taxonomy IN( 'post_tag' )";
+			$where .= " AND ";
+			$where .= "{$wpdb->terms}.name LIKE '%" . esc_sql( $_GET['search'] ) . "%'";
+			$where .= $user_where;
+
+		$where .= ' ) ';
+		
+		return $where;
+		
+	}
+	
+	$category_ids = explode( ',', $_GET['categories'] );
 	
 	$where .= ' OR ( (';
 	
@@ -235,9 +248,7 @@ function accessforall_custom_posts_groupby( $groupby, $query ) {
 
     global $wpdb;
 
-    if ( is_search() ) {
-        $groupby = "{$wpdb->posts}.ID";
-    }
+    $groupby = "{$wpdb->posts}.ID";
 
     return $groupby;
 
