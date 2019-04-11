@@ -92,11 +92,14 @@ function accessforall_custom_posts_where( $where, $query ) {
 		$user_where = accessforall_custom_get_user_posts_where();
 
 		$where .= " OR (
-						{$wpdb->term_taxonomy}.taxonomy IN( 'category' )
-						AND
-						{$wpdb->terms}.name LIKE '%" . esc_sql( $_GET['search'] ) . "%'
-						{$user_where}
-						" . apply_filters( 'accessforall_custom_posts_where', '' ) . "
+						(
+							{$wpdb->term_taxonomy}.taxonomy IN( 'category' )
+							AND
+							{$wpdb->terms}.name LIKE '%" . esc_sql( $_GET['search'] ) . "%'
+							{$user_where}
+							" . apply_filters( 'accessforall_custom_posts_where_category', '' ) . "
+						)
+						" . apply_filters( 'accessforall_custom_posts_where_after', '' ) . "
 					)";
 		
 	}
@@ -105,10 +108,10 @@ function accessforall_custom_posts_where( $where, $query ) {
 
 }
 
-add_filter( 'accessforall_custom_posts_where', function( $where ) {
+add_filter( 'accessforall_custom_posts_where_category', function( $where ) {
 	
 	if ( ! isset( $_GET['categories'] ) || 
-	   ! $_GET['categories'] ) return;
+	   ! $_GET['categories'] ) return $where;
 	
 	global $wpdb;
 	
@@ -119,15 +122,13 @@ add_filter( 'accessforall_custom_posts_where', function( $where ) {
 	
 	$first = true;
 	
-	$user_where = accessforall_custom_get_user_posts_where();
-	
 	foreach ( $category_ids as $category_id ) {
 		
 		$category = get_term( trim( $category_id ), 'category' );
 		
 		if ( ! $first ) {
 			
-			$where .= 'OR';
+			$where .= ' OR ';
 		}
 		
 		$where .= "{$wpdb->terms}.slug LIKE '" . esc_sql( $category->slug ) . "%'";
@@ -137,6 +138,50 @@ add_filter( 'accessforall_custom_posts_where', function( $where ) {
 	}
 	
 	$where .= ')';
+	
+	return $where;
+	
+} );
+
+// This accounts for searching by Tag without leaking into other Categories
+add_filter( 'accessforall_custom_posts_where_after', function( $where ) {
+	
+	if ( ! isset( $_GET['categories'] ) || 
+	   ! $_GET['categories'] ) return $where;
+	
+	if ( ! isset( $_GET['search'] ) || 
+	   ! $_GET['search'] ) return $where;
+	
+	global $wpdb;
+	
+	$category_ids = explode( ',', $_GET['categories'] );
+	
+	$user_where = accessforall_custom_get_user_posts_where();
+	
+	$where .= ' OR ( (';
+	
+	$first = true;
+	
+	foreach ( $category_ids as $category_id ) {
+		
+		if ( ! $first ) {
+			
+			$where .= ' OR ( ';
+			
+		}
+	
+		$where .= "{$wpdb->term_taxonomy}.taxonomy IN( 'post_tag' )";
+		$where .= " AND ";
+		$where .= "{$wpdb->terms}.name LIKE '%" . esc_sql( $_GET['search'] ) . "%'";
+		$where .= " AND ";
+		$where .= "{$wpdb->term_relationships}.term_taxonomy_id IN (" . esc_sql( $category_id ) . ") ";
+		$where .= $user_where;
+		
+		$where .= ' ) ';
+		
+	}
+	
+	$where .= ' )';
 	
 	return $where;
 	
@@ -161,8 +206,6 @@ function accessforall_custom_get_user_posts_where() {
 	$sql = " AND ({$wpdb->posts}.post_status = 'publish'";
 
     if ( $user_id ) {
-
-        $status[] = "'private'";
 
         $sql .= " OR {$wpdb->posts}.post_author = {$user_id} AND {$wpdb->posts}.post_status = 'private'";
 
